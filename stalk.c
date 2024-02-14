@@ -12,6 +12,7 @@
 
 static char port_number[MAX_LENGTH];
 static char remote_port[MAX_LENGTH];
+static char remote_machine[MAX_LENGTH];
 static int port_number_int;
 static int remote_port_int;
 
@@ -34,6 +35,7 @@ void *input_from_keyboard(void *in_list)
     while (1)
     {
         printf("[%d]: ", port_number_int);
+
         fgets(buffer, MAX_LENGTH, stdin); // Read string from keyboard
 
         // Lock thread
@@ -42,9 +44,9 @@ void *input_from_keyboard(void *in_list)
         // Clear in_list
         int list_size = List_count(in_list);
         List_first(in_list); // Go to first item in the in_list
-        for (int i = 0; i < list_size; i++)
-        {
-            void *result = List_remove(in_list);
+      
+        for (int i = 0; i < list_size; i++) {
+            void* result = List_remove(in_list);
         }
 
         // Save input from buffer to in_list
@@ -164,8 +166,8 @@ void *send_udp_out(void *in_list)
         pthread_mutex_lock(&lock);
 
         // Prevent from proceeding until there is data available
-        while (!in_list_has_data)
-        {
+
+        while(!in_list_has_data) {
             pthread_cond_wait(&cond_var, &lock);
         }
 
@@ -178,7 +180,8 @@ void *send_udp_out(void *in_list)
         pthread_mutex_unlock(&lock);
 
         // Send data to remote
-        sendto(sockfd, message, strlen(message), 0, (struct sockaddr *)&serverAddr, sizeof(serverAddr));
+
+        sendto(sockfd, message, strlen(message), 0, (struct sockaddr*)&serverAddr, sizeof(serverAddr));
     }
 
     // Close the socket
@@ -191,9 +194,12 @@ int main() {
     fgets(port_number, MAX_LENGTH, stdin); // Read string from keyboard
     printf("Remote port number: ");
     fgets(remote_port, MAX_LENGTH, stdin); // Read string from keyboard
+    printf("Remote machine name: ");
+    fgets(remote_machine, MAX_LENGTH, stdin); // Read string from keyboard
 
     remote_port_int = atoi(remote_port);
     port_number_int = atoi(port_number);
+    remote_machine[strcspn(remote_machine, "\n")] = 0; // Remove newline
 
     // Create input and output list
     in_list = List_create();
@@ -205,9 +211,12 @@ int main() {
     pthread_t udp_out;
     pthread_t udp_in;
 
+    // Initialize mutex
+    pthread_mutex_init(&lock, NULL);
+
     // Create threads
-	pthread_create(&keyboard_thread, NULL, input_from_keyboard, (void *)in_list);
-	pthread_create(&screen_thread, NULL, output_to_screen,(void *)out_list);
+	  pthread_create(&keyboard_thread, NULL, input_from_keyboard, (void *)in_list);
+	  pthread_create(&screen_thread, NULL, output_to_screen,(void *)out_list);
     pthread_create(&udp_in, NULL, receive_udp_in, (void *)out_list);
     pthread_create(&udp_out, NULL, send_udp_out, (void *)in_list);
 
@@ -217,5 +226,7 @@ int main() {
     pthread_join(udp_in, NULL);
     pthread_join(udp_out, NULL);
 
-	exit(0);
+    pthread_mutex_destroy(&lock);
+
+    exit(0);
 }
