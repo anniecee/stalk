@@ -22,8 +22,8 @@ static List *out_list;
 static pthread_mutex_t output_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t output_cond_var = PTHREAD_COND_INITIALIZER;
 
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t cond_var = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t input_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t input_cond_var = PTHREAD_COND_INITIALIZER;
 
 static int in_list_has_data = 0;
 
@@ -39,7 +39,7 @@ void *input_from_keyboard(void *in_list)
         fgets(buffer, MAX_LENGTH, stdin); // Read string from keyboard
 
         // Lock thread
-        pthread_mutex_lock(&lock);
+        pthread_mutex_lock(&input_lock);
 
         // Clear in_list
         int list_size = List_count(in_list);
@@ -54,10 +54,10 @@ void *input_from_keyboard(void *in_list)
 
         // Signal to wake up output_to_screen
         in_list_has_data = 1;
-        pthread_cond_signal(&cond_var);
+        pthread_cond_signal(&input_cond_var);
 
         // Unlock thread
-        pthread_mutex_unlock(&lock);
+        pthread_mutex_unlock(&input_lock);
     }
 
     return NULL;
@@ -163,12 +163,12 @@ void *send_udp_out(void *in_list)
     while (1)
     {
         // Lock thread
-        pthread_mutex_lock(&lock);
+        pthread_mutex_lock(&input_lock);
 
         // Prevent from proceeding until there is data available
 
         while(!in_list_has_data) {
-            pthread_cond_wait(&cond_var, &lock);
+            pthread_cond_wait(&input_cond_var, &input_lock);
         }
 
         // Read message from the list
@@ -177,7 +177,7 @@ void *send_udp_out(void *in_list)
         in_list_has_data = 0; // in_list is now empty
 
         // Unlock thread
-        pthread_mutex_unlock(&lock);
+        pthread_mutex_unlock(&input_lock);
 
         // Send data to remote
 
@@ -212,11 +212,12 @@ int main() {
     pthread_t udp_in;
 
     // Initialize mutex
-    pthread_mutex_init(&lock, NULL);
+    pthread_mutex_init(&input_lock, NULL);
+    pthread_mutex_init(&output_lock, NULL);
 
     // Create threads
-	  pthread_create(&keyboard_thread, NULL, input_from_keyboard, (void *)in_list);
-	  pthread_create(&screen_thread, NULL, output_to_screen,(void *)out_list);
+	pthread_create(&keyboard_thread, NULL, input_from_keyboard, (void *)in_list);
+	pthread_create(&screen_thread, NULL, output_to_screen,(void *)out_list);
     pthread_create(&udp_in, NULL, receive_udp_in, (void *)out_list);
     pthread_create(&udp_out, NULL, send_udp_out, (void *)in_list);
 
@@ -226,7 +227,8 @@ int main() {
     pthread_join(udp_in, NULL);
     pthread_join(udp_out, NULL);
 
-    pthread_mutex_destroy(&lock);
+    pthread_mutex_destroy(&input_lock);
+    pthread_mutex_destroy(&output_lock);
 
     exit(0);
 }
