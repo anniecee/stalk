@@ -11,11 +11,10 @@
 #include "list.h"
 
 #define MAX_LENGTH 100
-#define SERVER_IP "127.0.0.1"
 
-static char port_number[MAX_LENGTH];
-static char remote_port[MAX_LENGTH];
-static char remote_machine[MAX_LENGTH];
+static char *port_number;
+static char *remote_port;
+static char *remote_machine;
 
 static int port_number_int;
 static int remote_port_int;
@@ -71,44 +70,6 @@ void *output_to_screen(void *out_list) {
 }
 
 // Receive message from remote
-// void *receive_udp_in(void *in_list) {
-//     int sockfd;
-//     struct sockaddr_in serverAddr, clientAddr;
-//     socklen_t addr_size;
-//     char buffer[MAX_LENGTH];
-//
-//     // Create UDP socket
-//     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
-//         perror("Error creating socket");
-//         exit(EXIT_FAILURE);
-//     }
-//
-//     // Configure server address structure
-//     memset(&serverAddr, 0, sizeof(serverAddr));
-//     serverAddr.sin_family = AF_INET;
-//     serverAddr.sin_port = htons(port_number_int);
-//     serverAddr.sin_addr.s_addr = INADDR_ANY;
-//
-//     // Bind socket to address and port
-//     if (bind(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
-//         perror("Error binding socket");
-//         exit(EXIT_FAILURE);
-//     }
-//
-//     while(1){
-//         // Receive data from remote
-//         addr_size = sizeof(clientAddr);
-//         ssize_t recvBytes = recvfrom(sockfd, buffer, MAX_LENGTH, 0, (struct sockaddr*)&clientAddr, &addr_size);
-//         buffer[recvBytes] = '\0';
-//
-//         // Process received data
-//         printf("[%d]: %s\n", remote_port_int, buffer);
-//
-//     }
-//     // Close the socket
-//     close(sockfd);
-// }
-
 void *receive_udp_in(void *in_list) {
     struct addrinfo hints, *res, *p;
     int sockfd;
@@ -117,7 +78,7 @@ void *receive_udp_in(void *in_list) {
 
     // Set up hints structure
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET; // Use IPv4 or IPv6
+    hints.ai_family = AF_INET; // Use IPv4
     hints.ai_socktype = SOCK_DGRAM; // UDP socket
     hints.ai_flags = AI_PASSIVE; // For wildcard IP address
 
@@ -167,52 +128,7 @@ void *receive_udp_in(void *in_list) {
     close(sockfd);
 }
 
-//send message to remote
-// void *send_udp_out(void *out_list) {
-//     int sockfd;
-//     struct sockaddr_in serverAddr;
-//     char buffer[MAX_LENGTH];
-//
-//     // Create UDP socket
-//     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
-//         perror("Error creating socket");
-//         exit(EXIT_FAILURE);
-//     }
-//
-//     // Configure udp out address structure
-//     memset(&serverAddr, 0, sizeof(serverAddr));
-//     serverAddr.sin_family = AF_INET;
-//     serverAddr.sin_port = htons(remote_port_int);
-//     serverAddr.sin_addr.s_addr = inet_addr(remote_machine);
-//
-//     // User input
-//     while(1){
-//         printf("[%d]: ", port_number_int);
-//
-//         // Lock thread
-//         pthread_mutex_lock(&lock);
-//
-//         // Prevent from proceeding until there is data available
-//         while(!in_list_has_data) {
-//             pthread_cond_wait(&cond_var, &lock);
-//         }
-//
-//         // Read message from the list
-//         char *message = List_first(in_list);
-//
-//         in_list_has_data = 0; // in_list is now empty
-//
-//         // Unlock thread
-//         pthread_mutex_unlock(&lock);
-//
-//         // Send data to remote
-//         sendto(sockfd, message, strlen(message), 0, (struct sockaddr*)&serverAddr, sizeof(serverAddr));
-//     }
-//
-//     // Close the socket
-//     close(sockfd);
-// }
-//
+// Send message to remote
 void *send_udp_out(void *out_list) {
     struct addrinfo hints, *res;
     int sockfd;
@@ -276,21 +192,15 @@ void *send_udp_out(void *out_list) {
     close(sockfd);
 }
 
-int main() {
-    // Get port numbers from keyboard
-    printf("Port number: ");
-    fgets(port_number, MAX_LENGTH, stdin); // Read string from keyboard
-    printf("Remote port number: ");
-    fgets(remote_port, MAX_LENGTH, stdin); // Read string from keyboard
-    printf("Remote machine name: ");
-    fgets(remote_machine, MAX_LENGTH, stdin); // Read string from keyboard
-
-    remote_port[strcspn(remote_port, "\n")] = 0;
-    port_number[strcspn(port_number, "\n")] = 0;
-    remote_machine[strcspn(remote_machine, "\n")] = 0; // Remove newline
+int main(int argc, char* argv[]) {
+    // Get input arguments from user
+    port_number = argv[1];
+    remote_machine = argv[2];
+    remote_port = argv[3];
 
     port_number_int = atoi(port_number);
     remote_port_int = atoi(remote_port);
+
     // Create input and output list
     in_list = List_create();
     out_list = List_create();
