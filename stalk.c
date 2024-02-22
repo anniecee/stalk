@@ -29,6 +29,8 @@ static pthread_mutex_t input_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t input_cond_var = PTHREAD_COND_INITIALIZER;
 
 static int in_list_has_data = 0;
+static int out_list_has_data = 0;
+
 
 // Read input from keyboard
 void *input_from_keyboard(void *in_list)
@@ -68,9 +70,8 @@ void *input_from_keyboard(void *in_list)
 void *output_to_screen(void *out_list) {
     while (1) {
          pthread_mutex_lock(&output_lock);
-        // Critical section
 
-        if(List_count(out_list) == 0)
+        while(!out_list_has_data)
         {
             pthread_cond_wait(&output_cond_var, &output_lock);
         }
@@ -82,7 +83,8 @@ void *output_to_screen(void *out_list) {
         // Non Critical section
         // Process received data 
         printf("[%d]: %s\n", remote_port_int, outputBuffer);
-
+        
+        out_list_has_data = 0; // out_list is now empty
         pthread_mutex_unlock(&output_lock);
 
         // Signal a node is available
@@ -143,6 +145,8 @@ void *receive_udp_in(void *out_list) {
         // Start Critical Section
         // Put message into output list
         List_prepend(out_list, &receivedBuffer);
+
+        out_list_has_data = 1;
         pthread_cond_signal(&output_cond_var);
 
         pthread_mutex_unlock(&output_lock);
