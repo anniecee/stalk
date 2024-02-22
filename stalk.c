@@ -22,8 +22,11 @@ static int remote_port_int;
 static List *in_list;
 static List *out_list;
 
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t cond_var = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t output_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t output_cond_var = PTHREAD_COND_INITIALIZER;
+
+static pthread_mutex_t input_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t input_cond_var = PTHREAD_COND_INITIALIZER;
 
 static int in_list_has_data = 0;
 
@@ -34,9 +37,11 @@ void *input_from_keyboard(void *in_list)
 
     while(1) {
         fgets(buffer, MAX_LENGTH, stdin); // Read string from
-
+        if (*(buffer) == '!'){
+            
+        }
         // Lock thread
-        pthread_mutex_lock(&lock);
+        pthread_mutex_lock(&input_lock);
 
         // Clear in_list
         int list_size = List_count(in_list);
@@ -50,10 +55,10 @@ void *input_from_keyboard(void *in_list)
 
         // Signal to wake up output_to_screen
         in_list_has_data = 1;
-        pthread_cond_signal(&cond_var);
+        pthread_cond_signal(&input_cond_var);
 
         // Unlock thread
-        pthread_mutex_unlock(&lock);
+        pthread_mutex_unlock(&input_lock);
     }
 
 	return NULL;
@@ -62,19 +67,35 @@ void *input_from_keyboard(void *in_list)
 // Write output to the screen
 void *output_to_screen(void *out_list) {
     while (1) {
-        char *message = List_first(out_list); // Get message from buffer
-        fputs((char*)message, stdout); // Print message to screen
+         pthread_mutex_lock(&output_lock);
+        // Critical section
+
+        if(List_count(out_list) == 0)
+        {
+            pthread_cond_wait(&output_cond_var, &output_lock);
+        }
+
+        // Take message out of list
+        char outputBuffer[MAX_LENGTH];
+        strcpy(outputBuffer, (char *)List_trim(out_list));
+
+        // Non Critical section
+        // Process received data 
+        printf("[%d]: %s\n", remote_port_int, outputBuffer);
+
+        pthread_mutex_unlock(&output_lock);
+
+        // Signal a node is available
     }
 
     return NULL;
 }
 
 // Receive message from remote
-void *receive_udp_in(void *in_list) {
+void *receive_udp_in(void *out_list) {
     struct addrinfo hints, *res, *p;
     int sockfd;
-    ssize_t numBytes;
-    char buffer[MAX_LENGTH];
+    char receivedBuffer[MAX_LENGTH];
 
     // Set up hints structure
     memset(&hints, 0, sizeof(hints));
@@ -114,14 +135,17 @@ void *receive_udp_in(void *in_list) {
     // Receive and respond to client messages
     while (1) {
         // Receive data from remote
-        struct sockaddr_storage clientAddr;
-        socklen_t addr_size = sizeof(clientAddr);
+        ssize_t recvBytes = recvfrom(sockfd, receivedBuffer, MAX_LENGTH, 0, p->ai_addr, &p->ai_addrlen);
+        int terminatedChar = (recvBytes < MAX_LENGTH) ? recvBytes : (MAX_LENGTH - 1);
+        receivedBuffer[terminatedChar] = '\0';
+        
+        pthread_mutex_lock(&output_lock);
+        // Start Critical Section
+        // Put message into output list
+        List_prepend(out_list, &receivedBuffer);
+        pthread_cond_signal(&output_cond_var);
 
-        ssize_t recvBytes = recvfrom(sockfd, buffer, MAX_LENGTH, 0, (struct sockaddr*)&clientAddr, &addr_size);
-        buffer[recvBytes] = '\0';
-
-        // Process received data
-        printf("[%s]: %s\n", remote_port, buffer);
+        pthread_mutex_unlock(&output_lock);
     }
 
     // Close the socket
@@ -129,10 +153,9 @@ void *receive_udp_in(void *in_list) {
 }
 
 // Send message to remote
-void *send_udp_out(void *out_list) {
+void *send_udp_out(void *in_list) {
     struct addrinfo hints, *res;
     int sockfd;
-    ssize_t numBytes;
     char buffer[MAX_LENGTH];
 
     // Set up hints structure
@@ -166,14 +189,12 @@ void *send_udp_out(void *out_list) {
 
     // User input
     while(1){
-        printf("[%s]: ", port_number);
-
         // Lock thread
-        pthread_mutex_lock(&lock);
+        pthread_mutex_lock(&input_lock);
 
         // Prevent from proceeding until there is data available
         while(!in_list_has_data) {
-            pthread_cond_wait(&cond_var, &lock);
+            pthread_cond_wait(&input_cond_var, &input_lock);
         }
 
         // Read message from the list
@@ -182,7 +203,7 @@ void *send_udp_out(void *out_list) {
         in_list_has_data = 0; // in_list is now empty
 
         // Unlock thread
-        pthread_mutex_unlock(&lock);
+        pthread_mutex_unlock(&input_lock);
 
         // Send data to remote
         sendto(sockfd, message, strlen(message), 0, p->ai_addr, p->ai_addrlen);
@@ -212,21 +233,25 @@ int main(int argc, char* argv[]) {
     pthread_t udp_in;
 
     // Initialize mutex
-    pthread_mutex_init(&lock, NULL);
+    pthread_mutex_init(&input_lock, NULL);
+    pthread_mutex_init(&output_lock, NULL);
+
 
     // Create threads
 	pthread_create(&keyboard_thread, NULL, input_from_keyboard, (void *)in_list);
-	// pthread_create(&screen_thread, NULL, output_to_screen,(void *)in_list);
-    pthread_create(&udp_in, NULL, receive_udp_in,(void *)in_list);
-    pthread_create(&udp_out, NULL, send_udp_out,NULL);
+	pthread_create(&screen_thread, NULL, output_to_screen,(void *)out_list);
+    pthread_create(&udp_in, NULL, receive_udp_in,(void *)out_list);
+    pthread_create(&udp_out, NULL, send_udp_out, (void *)in_list);
 
     // Join threads
     pthread_join(keyboard_thread, NULL);
-    // pthread_join(screen_thread, NULL);
+    pthread_join(screen_thread, NULL);
     pthread_join(udp_in, NULL);
     pthread_join(udp_out, NULL);
 
-    pthread_mutex_destroy(&lock);
+    pthread_mutex_destroy(&input_lock);
+    pthread_mutex_destroy(&output_lock);
+
 
     exit(0);
 }
