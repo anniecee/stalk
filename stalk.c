@@ -9,6 +9,7 @@
 #include <netdb.h>
 
 #include "list.h"
+#include "list.c"
 
 #define MAX_LENGTH 100
 
@@ -28,9 +29,16 @@ static pthread_cond_t output_cond_var = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t input_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t input_cond_var = PTHREAD_COND_INITIALIZER;
 
+static pthread_mutex_t main_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t main_cond_var = PTHREAD_COND_INITIALIZER;
+
 static int in_list_has_data = 0;
 static int out_list_has_data = 0;
 
+
+void shut_down_all_threads(){
+ 
+}
 
 // Read input from keyboard
 void *input_from_keyboard(void *in_list)
@@ -239,7 +247,7 @@ int main(int argc, char* argv[]) {
     // Initialize mutex
     pthread_mutex_init(&input_lock, NULL);
     pthread_mutex_init(&output_lock, NULL);
-
+    pthread_mutex_init(&main_lock, NULL);
 
     // Create threads
 	pthread_create(&keyboard_thread, NULL, input_from_keyboard, (void *)in_list);
@@ -247,15 +255,33 @@ int main(int argc, char* argv[]) {
     pthread_create(&udp_in, NULL, receive_udp_in,(void *)out_list);
     pthread_create(&udp_out, NULL, send_udp_out, (void *)in_list);
 
+    pthread_mutex_lock(&main_lock);
+    pthread_cond_wait(&main_cond_var, &main_lock);
+    pthread_mutex_unlock(&main_lock);
+
+    printf("Program exiting\n");
+
+    // Pthread cancel
+    pthread_cancel(keyboard_thread);
+    pthread_cancel(screen_thread);
+    pthread_cancel(udp_in);
+    pthread_cancel(udp_out);
+
     // Join threads
     pthread_join(keyboard_thread, NULL);
     pthread_join(screen_thread, NULL);
     pthread_join(udp_in, NULL);
     pthread_join(udp_out, NULL);
 
+    // Mutex destroy
     pthread_mutex_destroy(&input_lock);
     pthread_mutex_destroy(&output_lock);
+    pthread_mutex_destroy(&main_lock);
 
+    // Cond var destroy
+    pthread_cond_destroy(&input_cond_var);
+    pthread_cond_destroy(&output_cond_var);
+    pthread_cond_destroy(&main_cond_var);
 
     exit(0);
 }
