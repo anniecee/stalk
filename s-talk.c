@@ -34,6 +34,11 @@ static pthread_cond_t main_cond_var = PTHREAD_COND_INITIALIZER;
 static int in_list_has_data = 0;
 static int out_list_has_data = 0;
 
+
+void freeMessages(void* message) {
+	return;
+}
+
 // Read input from keyboard
 void *input_from_keyboard(void *in_list)
 {
@@ -161,14 +166,13 @@ void *receive_udp_in(void *out_list) {
             pthread_mutex_unlock(&output_lock);
         }
     }
-
     // Close the socket
     close(sockfd);
 }
 
 // Send message to remote
 void *send_udp_out(void *in_list) {
-    struct addrinfo hints, *res;
+    struct addrinfo hints, *res, *p;
     int sockfd;
     char buffer[MAX_LENGTH];
 
@@ -183,7 +187,6 @@ void *send_udp_out(void *in_list) {
         exit(EXIT_FAILURE);
     }
 
-    struct addrinfo *p = res;
     // Loop through all the results and connect to the first one we can
     for (p = res; p != NULL; p = p->ai_next) {
         if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
@@ -262,6 +265,10 @@ int main(int argc, char* argv[]) {
     pthread_mutex_unlock(&main_lock);
 
     printf("Program exiting\n");
+
+    // List free
+    List_free(in_list, &freeMessages);
+    List_free(out_list, &freeMessages);
 
     // Pthread cancel
     pthread_cancel(keyboard_thread);
