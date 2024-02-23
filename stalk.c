@@ -9,7 +9,6 @@
 #include <netdb.h>
 
 #include "list.h"
-#include "list.c"
 
 #define MAX_LENGTH 100
 
@@ -36,10 +35,6 @@ static int in_list_has_data = 0;
 static int out_list_has_data = 0;
 
 
-void shut_down_all_threads(){
- 
-}
-
 // Read input from keyboard
 void *input_from_keyboard(void *in_list)
 {
@@ -48,7 +43,9 @@ void *input_from_keyboard(void *in_list)
     while(1) {
         fgets(buffer, MAX_LENGTH, stdin); // Read string from
         if (*(buffer) == '!'){
-            
+            pthread_mutex_lock(&main_lock);
+            pthread_cond_signal(&main_cond_var);
+            pthread_mutex_unlock(&main_lock);
         }
         // Lock thread
         pthread_mutex_lock(&input_lock);
@@ -148,16 +145,22 @@ void *receive_udp_in(void *out_list) {
         ssize_t recvBytes = recvfrom(sockfd, receivedBuffer, MAX_LENGTH, 0, p->ai_addr, &p->ai_addrlen);
         int terminatedChar = (recvBytes < MAX_LENGTH) ? recvBytes : (MAX_LENGTH - 1);
         receivedBuffer[terminatedChar] = '\0';
-        
-        pthread_mutex_lock(&output_lock);
-        // Start Critical Section
-        // Put message into output list
-        List_prepend(out_list, &receivedBuffer);
+        if (*(receivedBuffer) == '!'){
+            pthread_mutex_lock(&main_lock);
+            pthread_cond_signal(&main_cond_var);
+            pthread_mutex_unlock(&main_lock);
+        }
+        else{
+            pthread_mutex_lock(&output_lock);
+            // Start Critical Section
+            // Put message into output list
+            List_prepend(out_list, &receivedBuffer);
 
-        out_list_has_data = 1;
-        pthread_cond_signal(&output_cond_var);
+            out_list_has_data = 1;
+            pthread_cond_signal(&output_cond_var);
 
-        pthread_mutex_unlock(&output_lock);
+            pthread_mutex_unlock(&output_lock);
+        }
     }
 
     // Close the socket
