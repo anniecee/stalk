@@ -8,13 +8,13 @@ CFLAGS = -g -Werror
 LIBS = -lpthread
 
 # Source files
-SRCS = stalk.c
+SRCS = s-talk.c
 
 # Object files
 OBJS = list.o
 
 # Executable
-TARGET = stalk
+TARGET = s-talk
 
 all: $(TARGET)
 
