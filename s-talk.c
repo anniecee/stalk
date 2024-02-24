@@ -46,7 +46,7 @@ void *input_from_keyboard(void *in_list)
 
     while(1) {
         fgets(buffer, MAX_LENGTH, stdin); // Read string from
-        if (*(buffer) == '!'){
+        if (*(buffer) == '!' && *(buffer + 2) == '\0'){
             pthread_mutex_lock(&main_lock);
             pthread_cond_signal(&main_cond_var);
             pthread_mutex_unlock(&main_lock);
@@ -149,7 +149,7 @@ void *receive_udp_in(void *out_list) {
         ssize_t recvBytes = recvfrom(sockfd, receivedBuffer, MAX_LENGTH, 0, p->ai_addr, &p->ai_addrlen);
         int terminatedChar = (recvBytes < MAX_LENGTH) ? recvBytes : (MAX_LENGTH - 1);
         receivedBuffer[terminatedChar] = '\0';
-        if (*(receivedBuffer) == '!'){
+        if (*(receivedBuffer) == '!' && *(receivedBuffer + 2) == '\0'){
             pthread_mutex_lock(&main_lock);
             pthread_cond_signal(&main_cond_var);
             pthread_mutex_unlock(&main_lock);
