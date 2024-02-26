@@ -276,10 +276,6 @@ int main(int argc, char* argv[]) {
 
     printf("Program exiting\n");
 
-    // List free
-    List_free(in_list, &freeMessages);
-    List_free(out_list, &freeMessages);
-
     // Pthread cancel
     pthread_cancel(keyboard_thread);
     pthread_cancel(screen_thread);
@@ -301,6 +297,10 @@ int main(int argc, char* argv[]) {
     pthread_cond_destroy(&input_cond_var);
     pthread_cond_destroy(&output_cond_var);
     pthread_cond_destroy(&main_cond_var);
+
+	// List free
+	List_free(in_list, &freeMessages);
+	List_free(out_list, &freeMessages);
 
     exit(0);
 }
