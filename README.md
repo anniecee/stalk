@@ -1,4 +1,4 @@
--	To compile program: gcc s-talk.c list.o -o s-talk -lpthread OR make
+-	To compile program: make
 
 -	Run program: ./s-talk [my port number] [remote machine name] [remote port number]
 

@@ -34,7 +34,7 @@ static pthread_cond_t main_cond_var = PTHREAD_COND_INITIALIZER;
 static int in_list_has_data = 0;
 static int out_list_has_data = 0;
 
-
+// Function for Free_list() to call
 void freeMessages(void* message) {
 	return;
 }
@@ -45,12 +45,15 @@ void *input_from_keyboard(void *in_list)
     char buffer[MAX_LENGTH]; // Array to store the input string
 
     while(1) {
-        fgets(buffer, MAX_LENGTH, stdin); // Read string from
+        fgets(buffer, MAX_LENGTH, stdin); // Read string from input
+
+		// Main program exits when user input "!"
         if (*(buffer) == '!' && *(buffer + 2) == '\0'){
             pthread_mutex_lock(&main_lock);
             pthread_cond_signal(&main_cond_var);
             pthread_mutex_unlock(&main_lock);
         }
+
         // Lock thread
         pthread_mutex_lock(&input_lock);
 
@@ -78,8 +81,10 @@ void *input_from_keyboard(void *in_list)
 // Write output to the screen
 void *output_to_screen(void *out_list) {
     while (1) {
-         pthread_mutex_lock(&output_lock);
 
+        pthread_mutex_lock(&output_lock);
+
+		// Prevent from proceeding until out_list has data
         while(!out_list_has_data)
         {
             pthread_cond_wait(&output_cond_var, &output_lock);
@@ -90,13 +95,12 @@ void *output_to_screen(void *out_list) {
         strcpy(outputBuffer, (char *)List_trim(out_list));
 
         // Non Critical section
-        // Process received data 
+        // Process received data
         printf("[%d]: %s\n", remote_port_int, outputBuffer);
-        
+
         out_list_has_data = 0; // out_list is now empty
         pthread_mutex_unlock(&output_lock);
 
-        // Signal a node is available
     }
 
     return NULL;
@@ -147,8 +151,12 @@ void *receive_udp_in(void *out_list) {
     while (1) {
         // Receive data from remote
         ssize_t recvBytes = recvfrom(sockfd, receivedBuffer, MAX_LENGTH, 0, p->ai_addr, &p->ai_addrlen);
-        int terminatedChar = (recvBytes < MAX_LENGTH) ? recvBytes : (MAX_LENGTH - 1);
+
+		// Calculate terminated character index
+		int terminatedChar = (recvBytes < MAX_LENGTH) ? recvBytes : (MAX_LENGTH - 1);
         receivedBuffer[terminatedChar] = '\0';
+
+		// Terminate when receive "!" signal
         if (*(receivedBuffer) == '!' && *(receivedBuffer + 2) == '\0'){
             pthread_mutex_lock(&main_lock);
             pthread_cond_signal(&main_cond_var);
@@ -156,6 +164,7 @@ void *receive_udp_in(void *out_list) {
         }
         else{
             pthread_mutex_lock(&output_lock);
+
             // Start Critical Section
             // Put message into output list
             List_prepend(out_list, &receivedBuffer);
@@ -163,6 +172,7 @@ void *receive_udp_in(void *out_list) {
             out_list_has_data = 1;
             pthread_cond_signal(&output_cond_var);
 
+			// End Critical Section
             pthread_mutex_unlock(&output_lock);
         }
     }
